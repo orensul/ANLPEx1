@@ -7,14 +7,17 @@ from transformers import Trainer
 from transformers import DataCollatorWithPadding
 from transformers import EvalPrediction
 from transformers import set_seed
-# import wandb
+
 import os
 import torch
 import numpy as np
 
 NUM_ARGS = 4
 models = ['roberta-base', 'google/electra-base-generator', 'bert-base-uncased']
+run_wandb = False
 
+if run_wandb:
+    import wandb
 
 def preprocess_function(examples, tokenizer):
     # Tokenize the texts with Dynamic Padding
@@ -75,9 +78,12 @@ def main():
 
     accuracy_values = {}  # Collect accuracy values for each model and for each seed
     total_train_time = 0
-    # os.environ["WANDB_API_KEY"] = "8278bdace6809a899287c0488390f5bbc4e200f2"
+
+    if run_wandb:
+        os.environ["WANDB_API_KEY"] = "8278bdace6809a899287c0488390f5bbc4e200f2"
+
     tokenizers = {}
-    file_path = "/content/drive/MyDrive/ANLPEx1/res.txt"
+    file_path = "res.txt"
     res_file = open(file_path, 'w')
 
     for model_name in models:
@@ -103,12 +109,15 @@ def main():
             set_seed(seed)
 
             # Initialize Weights & Biases
-            # wandb.init(project="ANLP_ex1", name=f"model={model_name}_seed={seed}")
+            if run_wandb:
+                wandb.init(project="ANLP_ex1", name=f"model={model_name}_seed={seed}")
 
             # 6. Train
-            output_dir = '/content/drive/MyDrive/ANLPEx1/output/' + model_name + "/" + str(seed) + "/"
-            training_args = TrainingArguments(
-                output_dir=output_dir, logging_steps=200, save_steps=0, seed=seed, ) #, report_to='wandb'
+            output_dir = 'output/' + model_name + "/" + str(seed) + "/"
+            if run_wandb:
+                training_args = TrainingArguments(output_dir=output_dir, logging_steps=200, save_steps=0, seed=seed, report_to='wandb')
+            else:
+                training_args = TrainingArguments(output_dir=output_dir, logging_steps=200, save_steps=0, seed=seed)
 
             trainer = Trainer(
                 model=model,
@@ -127,7 +136,8 @@ def main():
 
             # 7. evaluate
             metrics = trainer.evaluate(eval_dataset=eval_dataset)
-            # wandb.log(metrics)
+            if run_wandb:
+                wandb.log(metrics)
 
             accuracy, eval_runtime = metrics['eval_accuracy'], metrics['eval_runtime']
 
@@ -136,11 +146,12 @@ def main():
             accuracy_values[model_name][seed] = accuracy
 
             # save the current model
-            model_path = '/content/drive/MyDrive/ANLPEx1/output/' + model_name + "/" + str(seed) + "/" + "model.pth"
+            model_path = 'output/' + model_name + "/" + str(seed) + "/" + "model.pth"
             torch.save(model, model_path)
             print("saving model in path=" + model_path)
 
-            # wandb.finish()
+            if run_wandb:
+                wandb.finish()
 
         # Calculate mean and standard deviation
         model_acc = []
@@ -173,8 +184,8 @@ def main():
             best_seed = seed
             best_acc = acc
 
-            # load best model (in terms of mean accuracy) with his best seed
-    best_model_path = '/content/drive/MyDrive/ANLPEx1/output/' + model_highest_mean_accuracy + "/" + str(
+    # load best model (in terms of mean accuracy) with his best seed
+    best_model_path = 'output/' + model_highest_mean_accuracy + "/" + str(
         best_seed) + "/" + "model.pth"
     best_model = torch.load(best_model_path)
     # Set the model to evaluation mode
@@ -183,7 +194,7 @@ def main():
     # best model tokenizer
     best_model_tokenizer = tokenizers[model_highest_mean_accuracy]
 
-    file_path = "/content/drive/MyDrive/ANLPEx1/predictions.txt"
+    file_path = "predictions.txt"
     predictions_file = open(file_path, 'w')
 
     # make predictions
